@@ -1,0 +1,297 @@
+#!/bin/sh
+
+. scripts/sh/color.sh
+
+# ----- DEFINE, READ AND SAVE VARIABLES -----
+
+ConfigFile=config
+Problem=""
+CaseId=""
+Debug="false"
+Interactive="false"
+RunAllTests="false"
+SolutionFile="main"
+Lang="cpp"
+
+# Read default values for Problem and CaseId from settings file
+if [ -f "$ConfigFile" ]; then
+  eval "$(cat $ConfigFile)"
+fi
+
+ProblemGiven="false"
+SetProblem() {
+  if [ "$ProblemGiven" = "true" ]; then
+    EchoError "Problem given multiple times, but it must be given at most once."
+    exit 1
+  else
+    Problem="$1"
+  fi
+  ProblemGiven="true"
+}
+
+CaseIdGiven="false"
+SetCaseId() {
+  if [ "$CaseIdGiven" = "true" ]; then
+    EchoError "CaseId given multiple times, but it must be given at most once."
+    exit 1
+  else
+    CaseId="$1"
+  fi
+  CaseIdGiven="true"
+}
+
+SolutionFileGiven="false"
+SetSolutionFile() {
+  if [ "$SolutionFileGiven" = "true" ]; then
+    EchoError "Solution file given multiple times, but it must be given at most once."
+    exit 1
+  else
+    SolutionFile="$1"
+  fi
+  SolutionFileGiven="true"
+}
+
+LanguageGiven="false"
+SetLanguage() {
+  if [ "$LanguageGiven" = "true" ]; then
+    EchoError "Language given multiple times, but it must be given at most once."
+    exit 1
+  else
+    Lang="$1"
+  fi
+  LanguageGiven="true"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -i|--interactive)
+      shift
+      Interactive="true"
+      ;;
+    
+    # Problem
+    -p|--problem)
+      shift
+      SetProblem "$1"
+      shift
+      ;;
+
+    # Test case ID
+    -c|--case)
+      shift
+      SetCaseId "$1"
+      shift
+      ;;
+
+    # Debug flag
+    -d|--debug)
+      shift
+      Debug="true"
+      ;;
+
+    # Run all cases
+    -a|--all)
+      shift
+      RunAllTests="true"
+      ;;
+
+    # Show manual
+    -h|--help)
+      ./scripts/sh/docs/show-run-manual.sh
+      exit 0
+      ;;
+
+    -l|--lang)
+      shift
+      SetLanguage "$1"
+      shift
+      ;;
+
+    -s|--solution)
+      shift
+      SetSolutionFile "$1"
+      shift
+      ;;
+
+    # Some other argument
+    *)
+      if [ "$CaseIdGiven" = "false" ]; then
+        SetCaseId "$1"
+        shift
+      else
+        EchoError "Could not parse argument: $1"
+        exit 1;
+      fi
+      ;;
+  esac
+done
+
+if [ -f "workspace/$Problem/config" ]; then
+  EchoInfo "Reading problem specific config from workspace/$Problem/config"
+  eval "$(cat "workspace/$Problem/config")"
+fi
+
+if [ -z "$Problem" ]; then
+  ./scripts/sh/docs/show-error-problem-required.sh
+  exit 1
+fi
+
+if [ -z "$CaseId" ]; then
+  CaseId="0"
+fi
+
+if ! echo "$Lang" | grep -Eq "^cpp|go|java|python$" ; then
+  EchoError "Invalid language $Lang"
+  exit 1
+fi
+
+LangExtension="$Lang"
+if [ "$Lang" = "python" ]; then
+  LangExtension="py"
+fi
+
+{
+  echo "Lang=$Lang"
+  echo "Problem=$Problem"
+  echo "CaseId=0"
+  echo "SolutionFile=$SolutionFile"
+} > "$ConfigFile"
+
+# ----- RUN SOLUTION -----
+
+SolutionFile="workspace/$Problem/$SolutionFile.$LangExtension"
+
+CheckerFile="workspace/$Problem/polygon/checker.cpp"
+if [ -f "$CheckerFile" ]; then
+  EchoInfo "Checker file: $CheckerFile"
+  CheckerCacheFile="build/polygon/checker.cpp.last_compiled"
+  CheckerExecFile="build/polygon/checker"
+  ./scripts/sh/compile-cpp.sh "$CheckerFile" "$CheckerExecFile" "$CheckerCacheFile"
+  CheckerFile="$CheckerExecFile"
+else
+  CheckerFile=""
+fi
+
+EchoInfo "Solution file: $SolutionFile"
+
+if [ "$Lang" = "cpp" ]; then
+  if cmp --silent -- "$SolutionFile" "build/main.cpp.last_compiled"; then
+    EchoInfo "No changes in $SolutionFile"
+    SolutionFile="build/solution"
+  else
+    EchoInfo "Compiling cpp file: $SolutionFile"
+    mkdir -p "build"
+    g++ "$SolutionFile" -o "build/solution" -std=c++17 -Wall -Wextra -O2 -Wshadow -pedantic -Wformat=2 -Wfloat-equal -Wcast-qual -Wcast-align -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC -fno-sanitize-recover -fstack-protector -I "scripts/cpp/polygon/cpp-include-path" -DLOCAL
+    if [ $? -ne 0 ]; then
+      EchoError "Compilation Error"
+      exit 1
+    fi
+    cp "$SolutionFile" "build/main.cpp.last_compiled"
+    SolutionFile="build/solution"
+  fi
+
+  if [ ! -f "$SolutionFile" ]; then
+    EchoError "Solution file not found ($SolutionFile)"
+    exit 0
+  fi
+elif [ "$Lang" = "java" ]; then
+  if cmp --silent -- "$SolutionFile" "build/Main.java.last_compiled"; then
+    EchoInfo "No changes in $SolutionFile"
+    SolutionFile="build/solution"
+  else
+    EchoInfo "Compiling java file: $SolutionFile"
+    mkdir -p "build"
+    javac "$SolutionFile" -d "build/"
+    if [ $? -ne 0 ]; then
+      EchoError "Compilation Error"
+      exit 1
+    fi
+    cp "$SolutionFile" "build/Main.java.last_compiled"
+    SolutionFile="build/Main"
+  fi
+else
+  if [ ! -f "$SolutionFile" ]; then
+    EchoError "Solution file not found ($SolutionFile)"
+    exit 0
+  fi
+fi
+
+RunSolution() {
+  if [ "$Lang" = "go" ]; then
+    go run "$SolutionFile"
+  elif [ "$Lang" = "python" ]; then
+    python3 "$SolutionFile"
+  elif [ "$Lang" = "java" ]; then
+    java -cp "build" "Main"
+  else
+    ./$SolutionFile
+  fi
+}
+
+RunTestCase() {
+  InputFile="workspace/$Problem/cases/$CaseId.in"
+  OutputFile="workspace/$Problem/cases/$CaseId.txt"
+  ExpectedOutputFile="workspace/$Problem/cases/$CaseId.out"
+
+  if [ ! -f "$InputFile" ]; then
+    EchoError "Input file not found (${InputFile})"
+    exit 1
+  fi
+
+  if [ -f "$OutputFile" ]; then
+    rm "$OutputFile"
+  fi
+
+  if [ "$Debug" = "true" ]; then
+    EchoInfo "----- START -----"
+    RunSolution <"$InputFile" | tee "$OutputFile"
+    EchoInfo "------ END ------"
+  else
+    RunSolution <"$InputFile" | cat > "$OutputFile"
+  fi
+
+  EchoInfoNoEndl " -> Case $CaseId: "
+  if [ -f "$ExpectedOutputFile" ]; then
+    if [ -f "$CheckerFile" ]; then
+      if ./"$CheckerFile" "$InputFile" "$OutputFile" "$ExpectedOutputFile"; then
+        CorrectCount=$((CorrectCount+1))
+      else
+        IncorrectCount=$((IncorrectCount+1))
+      fi
+    else
+      if cmp --silent -- "$OutputFile" "$ExpectedOutputFile"; then
+        EchoGreen "Correct! :D"
+        CorrectCount=$((CorrectCount+1))
+      else
+        EchoRed "Wrong :("
+        IncorrectCount=$((IncorrectCount+1))
+      fi
+    fi
+  else
+    EchoInfo "No answer file: $ExpectedOutputFile"
+  fi
+}
+
+if [ "$Interactive" = "true" ]; then
+  EchoInfo "Running in interactive mode..."
+  RunSolution
+elif [ "$RunAllTests" = "false" ]; then
+  EchoInfo "Testing problem $Problem against test case $CaseId."
+  RunTestCase
+else
+  EchoInfo "Testing problem $Problem against all test cases..."
+  CaseId=0
+  CorrectCount=0
+  IncorrectCount=0
+
+  for FileIt in "workspace/$Problem/cases/"*".in"; do
+    FileName=$(basename -- "$FileIt") # Get file name, without path
+    CaseId="${FileName%.*}" # Remove extension
+    RunTestCase
+  done
+
+  EchoGreen "Total correct: $CorrectCount"
+  if [ $IncorrectCount -gt 0 ]; then
+    EchoRed "Total incorrect: $IncorrectCount"
+  fi
+fi

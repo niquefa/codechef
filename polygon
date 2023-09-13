@@ -1,0 +1,130 @@
+#!/bin/sh
+
+. scripts/sh/color.sh
+
+ConfigFile=config
+SeeManual="See manual with -h or --help flag."
+
+# Read default values for Problem and CaseId from settings file
+if [ -f "$ConfigFile" ]; then
+  eval "$(cat $ConfigFile)"
+else
+  EchoError "./config file is required. ${SeeManual}"
+  exit 1
+fi
+
+# Read default values for Problem and CaseId from settings file
+if [ -f "$ConfigFile" ]; then
+  eval "$(cat $ConfigFile)"
+fi
+
+ShowManual() {
+  ./scripts/sh/docs/show-polygon-manual.sh
+  exit 0
+}
+
+if [ $# -eq 0 ]; then
+  EchoError "Requires at least one argument. ${SeeManual}"
+  exit 1
+fi
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  ShowManual
+fi
+
+CompileValidator() {
+  ValidatorSourceFile="workspace/$Problem/polygon/validator.cpp"
+  ValidatorExecFile="build/polygon/validator"
+  ValidatorCacheFile="build/polygon/validator.cpp.last_compiled"
+
+  ./scripts/sh/compile-cpp.sh "$ValidatorSourceFile" "$ValidatorExecFile" "$ValidatorCacheFile"
+}
+
+RunValidatorOnCase() {
+  InputFile="workspace/$Problem/cases/$1.in"
+  EchoInfo "-> Validating $InputFile"
+  if ! ./"$ValidatorExecFile" <"$InputFile" ; then
+    InvalidInputCount=$((InvalidInputCount+1))
+  else
+    ValidInputCount=$((ValidInputCount+1))
+  fi
+}
+
+RunValidatorOnAllCases() {
+  EchoInfo "Running validator on all cases\n"
+
+  for FileIt in "workspace/$Problem/cases/"*".in"; do
+    FileName=$(basename -- "$FileIt") # Get file name, without path
+    CaseId="${FileName%.*}" # Remove extension
+    RunValidatorOnCase "$CaseId"
+  done
+
+  EchoInfo "Valid cases: $ValidInputCount"
+  if [ $InvalidInputCount -gt 0 ]; then
+    EchoError "Found $InvalidInputCount invalid cases"
+    exit 1
+  else
+    EchoGreen "All cases passed validation!"
+  fi
+}
+
+CompileGenerator() {
+  GeneratorFileName="$1"
+
+  GeneratorSourceFile="workspace/$Problem/polygon/$GeneratorFileName.cpp"
+  GeneratorExecFile="build/polygon/generator"
+  GeneratorCacheFile="build/polygon/generator.cpp.last_compiled"
+  ./scripts/sh/compile-cpp.sh "$GeneratorSourceFile" "$GeneratorExecFile" "$GeneratorCacheFile"
+}
+
+case "$1" in
+  validator|v)
+    shift
+    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+      ./scripts/sh/docs/show-polygon-validator-manual.sh
+      exit 0
+    fi
+
+    if ! CompileValidator ; then
+      exit 1
+    fi
+    InvalidInputCount=0
+    ValidInputCount=0
+    if [ -z "$1" ]; then
+      RunValidatorOnAllCases "$1"
+    else
+      RunValidatorOnCase "$1"
+    fi
+    ;;
+
+  generator|g)
+    shift
+    if [ -z "$1" ]; then
+      EchoError "Generator name is required. ${SeeManual}"
+      exit 1
+    elif [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+      ./scripts/sh/docs/show-polygon-generator-manual.sh
+      exit 0
+    else
+      OutputFile=""
+      if [ "$1" = "-c" ] || [ "$1" = "--case" ]; then
+        shift
+        OutputFile="workspace/$Problem/cases/$1.in"
+        shift
+      fi
+      CompileGenerator $1
+      shift
+      if [ -z "$OutputFile" ]; then
+        ./"$GeneratorExecFile" "$@"
+      else
+        EchoInfo "Saving generated case in: $OutputFile"
+        ./"$GeneratorExecFile" "$@" > "$OutputFile"
+      fi
+    fi
+    ;;
+
+  *)
+    EchoError "Could not parse argument: $1"
+    exit 1;
+    ;;
+esac

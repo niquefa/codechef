@@ -1,0 +1,148 @@
+#!/bin/sh
+
+. scripts/sh/color.sh
+
+Lang="cpp"
+Problem=""
+ConfigFile=config
+Polygon="false"
+ScrapTests="false"
+LanguageGiven="false"
+NCreatedCases=1
+ProblemUrl=""
+
+GetProblemHtml() {
+  EchoInfo "Getting tests from -> $1"
+  mkdir -p tmp
+  wget "$1" -O tmp/problem.html 
+  ProblemUrl="$1"
+  ScrapTests="true"
+}
+
+SetLanguage() {
+  if [ "$LanguageGiven" = "true" ]; then
+    EchoError "Language given multiple times, but it must be given at most once."
+    exit 1
+  else
+    Lang="$1"
+  fi
+  LanguageGiven="true"
+}
+
+createCaseFiles(){
+  touch "workspace/$Problem/cases/0.in"
+  touch "workspace/$Problem/cases/0.out"
+  NcreatedCases=1
+}
+
+scrapCases() {
+  if ! command -v "python3" > /dev/null 2>&1
+  then
+    ./scripts/sh/docs/show-error-python3-not-found.sh
+    exit 1
+  fi
+  NCreatedCases=$(python3 scripts/python/extract_cases.py workspace/$Problem/cases/)
+  if [ "$NCreatedCases" = "-1" ]; then
+    EchoRed "Could not get cases from $ProblemUrl"
+    createCaseFiles
+  else
+    EchoGreen "Found $NCreatedCases cases in $ProblemUrl"
+  fi
+}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      ./scripts/sh/docs/show-create-manual.sh
+      exit 0
+      ;;
+
+    -l|--lang)
+      shift
+      SetLanguage "$1"
+      shift
+      ;;
+
+    -p|--polygon)
+      shift
+      Polygon="true"
+      ;;
+    -u|--url)
+      shift
+      GetProblemHtml "$1"
+      shift
+      ;;
+    *)
+      if [ -z "$Problem" ]; then
+        Problem="$1"
+        shift
+      else
+        EchoError "Could not parse argument: $1"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if ! echo "$Lang" | grep -Eq "^cpp|go|java|python$" ; then
+  EchoError "Invalid language $Lang"
+  exit 1
+fi
+
+LangExtension="$Lang"
+if [ "$Lang" = "python" ]; then
+  LangExtension="py"
+fi
+
+
+if [ -d "workspace/$Problem" ]
+then
+	EchoError "Directory workspace/$Problem already exists"
+	exit 1
+fi
+
+mkdir -p "workspace/$Problem/cases"
+mkdir -p "workspace/$Problem/polygon"
+
+EchoInfo "Created files for polygon:"
+cp "scripts/cpp/polygon/templates/checker.cpp" "workspace/$Problem/polygon"
+EchoInfo " -> workspace/$Problem/polygon/checker.cpp"
+
+if [ "$Polygon" = "true" ]; then
+  cp "scripts/cpp/polygon/templates/main.cpp" "workspace/$Problem"
+  cp "scripts/cpp/polygon/templates/validator.cpp" "workspace/$Problem/polygon"
+  cp "scripts/cpp/polygon/templates/generator.cpp" "workspace/$Problem/polygon/gen-random.cpp"
+  EchoInfo " -> workspace/$Problem/polygon/validator.cpp"
+  EchoInfo " -> workspace/$Problem/polygon/gen-random.cpp"
+  echo "4 11" > "workspace/$Problem/cases/0.in"
+  echo "15" > "workspace/$Problem/cases/0.out"
+else
+  cp "notebook/$Lang/template.$LangExtension" "workspace/$Problem/main.$LangExtension"
+  if [ "$ScrapTests" = "true" ]; then
+    scrapCases 
+  else
+    createCaseFiles
+  fi
+fi
+
+{
+  echo "Lang=$Lang"
+  echo "Problem=$Problem"
+  echo "CaseId=0"
+  echo "SolutionFile=main"
+} > "$ConfigFile"
+
+EchoInfo "Created files:"
+EchoInfo " -> workspace/$Problem/main.$LangExtension"
+for i in $(seq 1 $NCreatedCases); do 
+  EchoInfo " -> workspace/$Problem/cases/$i.in"
+  EchoInfo " -> workspace/$Problem/cases/$i.out"
+done
+if ! command -v "code" > /dev/null 2>&1
+then
+  ./scripts/sh/docs/show-error-code-not-found.sh
+  exit 1
+else
+  code "workspace/$Problem/main.$LangExtension"
+  code "workspace/$Problem/cases/0.in"
+  code "workspace/$Problem/cases/0.out"
+fi

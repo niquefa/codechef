@@ -1,0 +1,50 @@
+#!/bin/sh
+
+. "scripts/sh/color.sh"
+
+ConfigFile=config
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  ./scripts/sh/docs/show-add-case-manual.sh
+  exit 0
+fi
+
+if [ ! -f "$ConfigFile" ]; then
+  EchoError "./config file not found"
+  exit 1
+fi
+
+eval "$(cat $ConfigFile)"
+
+if [ -z "$Problem" ]; then
+  EchoError "Problem variable not found in ./config file"
+  exit 1
+fi
+
+
+if [ -z "$1" ]; then
+  CaseId=0
+  while [ -f "workspace/$Problem/cases/$CaseId.in" ]; do
+    CaseId=$((CaseId+1))
+  done
+else
+  CaseId="$1"
+fi
+
+INPUT_FILE="workspace/$Problem/cases/$CaseId.out"
+OUTPUT_FILE="workspace/$Problem/cases/$CaseId.in"
+
+EchoInfo "Adding case $CaseId"
+EchoInfo " -> $INPUT_FILE"
+EchoInfo " -> $OUTPUT_FILE"
+
+if ! command -v "code" > /dev/null 2>&1
+then
+  touch "$INPUT_FILE"
+  touch "$OUTPUT_FILE"
+  ./scripts/sh/docs/show-error-code-not-found.sh
+  exit 1
+else
+  code "$INPUT_FILE"
+  code "$OUTPUT_FILE"
+fi
