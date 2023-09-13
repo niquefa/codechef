@@ -1,0 +1,23 @@
+{
+  "files.associations": {
+    "*.html": "html",
+    "*.js": "javascriptreact",
+    "*.jsx": "javascriptreact",
+    "*.ts": "typescriptreact",
+    "*.tsx": "typescriptreact",
+    "vector": "cpp",
+    "bitset": "cpp",
+    "ctime": "cpp",
+    "deque": "cpp",
+    "functional": "cpp",
+    "string": "cpp",
+    "limits": "cpp",
+    "list": "cpp",
+    "map": "cpp",
+    "queue": "cpp",
+    "set": "cpp",
+    "sstream": "cpp",
+    "stack": "cpp",
+    "utility": "cpp"
+  }
+}
