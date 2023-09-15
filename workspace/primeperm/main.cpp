@@ -121,31 +121,27 @@ void solve() {
     print_solution(solution);
     return;
   }
-  vector<int> vec(n-5);
-  iota(vec.begin(), vec.end(), 1);
-  set<int> permutation_set(vec.begin(), vec.end());
-  vector<int> solution(n);
-  int number_to_use;
-  print_set(permutation_set);
-
-  for( int i = 1; i <= n-5; ++ i ) {
-    number_to_use = -1;
-    for( int x : permutation_set ) {
-      if( is_prime[abs(x - i)] ) {
-        number_to_use = x;
-        break;
-      }
-    }
-    solution[i-1] = number_to_use;
-    permutation_set.erase(number_to_use);
-    debug(i);
-    print_set(permutation_set);
-    va(solution);
+  vector<vector<int>> saved = {
+    {3, 4, 1, 2},
+    {3, 4, 5, 1, 2},
+    {3, 4, 5, 6, 2, 1},
+    {3, 4, 5, 6, 7, 1, 2}
+  };
+  vector<int> ans(n + 1, 0);
+  while(n > 7) {
+    ans[n] = n - 2;
+    ans[n-2] = n;
+    ans[n-1] = n - 3;
+    ans[n-3] = n - 1;
+    n -= 4;
   }
-  solution[n-1] = n-3;
-  solution[n-2] = n-4;
-  solution[n-3] = n;
-  solution[n-4] = n-1;
-  solution[n-5] = n-2;
-  print_solution(solution);
+  for(int j = 1; j <= n; ++j) {
+    ans[j] = saved[n-4][j-1];
+  }
+  for(int j = 1; j < ans.size(); ++j) {
+    cout << ans[j];
+    if(j < ans.size() - 1) 
+        cout << " ";
+  }
+  cout << endl;
 }

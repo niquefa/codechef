@@ -1,4 +1,4 @@
-Lang=cpp
-Problem=primeperm
+Lang=python
+Problem=stargraphPY
 CaseId=0
 SolutionFile=main
