@@ -18,6 +18,7 @@
     "set": "cpp",
     "sstream": "cpp",
     "stack": "cpp",
-    "utility": "cpp"
+    "utility": "cpp",
+    "iostream": "cpp"
   }
 }

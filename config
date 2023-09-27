@@ -1,4 +1,4 @@
-Lang=python
-Problem=stargraphPY
+Lang=cpp
+Problem=parper
 CaseId=0
 SolutionFile=main
